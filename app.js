@@ -495,8 +495,6 @@ async function runEdit() {
   fd.append("return_image_quality", "80");
   fd.append("return_image_format", "png");
   fd.append("lora_scale", "0");
-  fd.append("width", "0");
-  fd.append("height", "0");
   fd.append("image", f1, f1.name);
   fd.append("image2", f2, f2.name);
 
