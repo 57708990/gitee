@@ -81,8 +81,8 @@ function clearRememberedKey() {
 }
 
 function showPanel(model) {
-  $("panelZ").style.display = model === "z-image" ? "block" : "none";
-  $("panelEdit").style.display = model === "Edit-2511" ? "block" : "none";
+  $("panelZ").style.display = model === "FLUX.1-dev" ? "block" : "none";
+  $("panelEdit").style.display = model === "FLUX.1-Kontext-dev" ? "block" : "none";
   $("panelWan").style.display = model === "Wan2.2-I2V-A14B" ? "block" : "none";
   $("panelHunyuan").style.display = model === "HunyuanVideo-1.5" ? "block" : "none";
 }
@@ -390,7 +390,7 @@ async function runHunyuanVideo() {
   }
 }
 
-// -------- z-image --------
+// -------- FLUX.1-dev (Text-to-Image) --------
 async function runZImage() {
   const apiKey = getApiKey();
   rememberKeyMaybe();
@@ -402,8 +402,20 @@ async function runZImage() {
   const [w, h] = Z_RESOLUTIONS[$("zRes").value];
   const size = `${w}x${h}`;
 
-  setStatus("z-image 生成中... / Generating...");
-  const payload = { prompt, model: "z-image-turbo", n, size };
+  setStatus("FLUX.1-dev 生成中... / Generating...");
+  const payload = {
+    prompt,
+    model: "FLUX.1-dev",
+    n,
+    size,
+    num_inference_steps: 20,
+    guidance_scale: 7.5,
+    seed: Math.floor(Math.random() * 2147483647),
+    lora_weights: [],
+    lora_scale: 0,
+    width: 0,
+    height: 0,
+  };
 
   const res = await apiFetch("images/generations", {
     method: "POST",
@@ -416,16 +428,15 @@ async function runZImage() {
 
   const j = await readJsonSafely(res);
   if (!res.ok) {
-    setStatus("z-image 失败 / Failed", "err");
-    addOutputItem({ title: "z-image 生成失败 / Failed", rawJson: j, meta: `HTTP ${res.status}` });
+    setStatus("FLUX.1-dev 失败 / Failed", "err");
+    addOutputItem({ title: "FLUX.1-dev 生成失败 / Failed", rawJson: j, meta: `HTTP ${res.status}` });
     throw new Error(`API 错误 / API Error (${res.status})`);
   }
 
-  // Expect OpenAI-like: { data: [ { url | b64_json } ] }
   const data = Array.isArray(j.data) ? j.data : [];
   if (!data.length) {
-    addOutputItem({ title: "z-image 返回无数据 / Empty response", rawJson: j });
-    setStatus("z-image 失败 / Failed", "err");
+    addOutputItem({ title: "FLUX.1-dev 返回无数据 / Empty response", rawJson: j });
+    setStatus("FLUX.1-dev 失败 / Failed", "err");
     return;
   }
 
@@ -442,26 +453,26 @@ async function runZImage() {
       const blob = new Blob([bytes], { type: "image/png" });
       blobInfo = { blob, objUrl: URL.createObjectURL(blob) };
     } else {
-      addOutputItem({ title: `z-image 第${i+1}张无数据 / No image data`, rawJson: item });
+      addOutputItem({ title: `FLUX.1-dev 第${i+1}张无数据 / No image data`, rawJson: item });
       continue;
     }
 
     const img = document.createElement("img");
     img.src = blobInfo.objUrl;
 
-    const filename = `z-image-${nowTs()}-${i+1}.png`;
+    const filename = `flux-dev-${nowTs()}-${i+1}.png`;
     addOutputItem({
-      title: `z-image 输出 #${i+1}`,
+      title: `FLUX.1-dev 输出 #${i+1}`,
       meta: `size=${size}, n=${n}`,
       element: img,
       download: { href: blobInfo.objUrl, filename },
     });
   }
 
-  setStatus("z-image 成功 / Success", "ok");
+  setStatus("FLUX.1-dev 成功 / Success", "ok");
 }
 
-// -------- Edit-2511 --------
+// -------- FLUX.1-Kontext-dev (Image Edit) --------
 async function runEdit() {
   const apiKey = getApiKey();
   rememberKeyMaybe();
@@ -471,81 +482,75 @@ async function runEdit() {
   const prompt = $("editPrompt").value.trim();
   if (!f1 || !f2 || !prompt) throw new Error("请上传2张图片并输入提示词 / Please provide 2 images and prompt");
 
-  const taskTypes = Array.from(document.querySelectorAll("input[name='editTaskType']:checked")).map(x => x.value);
-  if (!taskTypes.length) throw new Error("至少选择一个 task_types / Choose at least one task type");
-
-  const steps = clampInt($("editSteps").value, 1, 50, 4);
-  const guidance = clampFloat($("editGuidance").value, 0, 10, 1.0);
+  const steps = clampInt($("editSteps").value, 1, 50, 20);
+  const guidance = clampFloat($("editGuidance").value, 0, 10, 2.5);
 
   const fd = new FormData();
   fd.append("prompt", prompt);
-  fd.append("model", "Qwen-Image-Edit-2511");
-  fd.append("num_inference_steps", String(steps));
+  fd.append("model", "FLUX.1-Kontext-dev");
+  fd.append("size", "1024x1024");
+  fd.append("steps", String(steps));
   fd.append("guidance_scale", String(guidance));
-  for (const t of taskTypes) fd.append("task_types", t);
+  fd.append("seed", String(Math.floor(Math.random() * 2147483647)));
+  fd.append("return_image_quality", "80");
+  fd.append("return_image_format", "png");
+  fd.append("lora_scale", "0");
+  fd.append("width", "0");
+  fd.append("height", "0");
   fd.append("image", f1, f1.name);
-  fd.append("image", f2, f2.name);
+  fd.append("image2", f2, f2.name);
 
-  setStatus("Edit-2511 创建任务中... / Creating task...");
-  const res = await apiFetch("async/images/edits", {
+  setStatus("FLUX.1-Kontext-dev 生成中... / Generating...");
+  const res = await apiFetch("images/edits", {
     method: "POST",
     headers: { "Authorization": `Bearer ${apiKey}` },
     body: fd,
   });
 
   const j = await readJsonSafely(res);
-  if (!res.ok || !j.task_id) {
-    setStatus("Edit-2511 创建失败 / Create failed", "err");
+  if (!res.ok) {
+    setStatus("FLUX.1-Kontext-dev 失败 / Failed", "err");
+    addOutputItem({ title: "FLUX.1-Kontext-dev 生成失败 / Failed", rawJson: j, meta: `HTTP ${res.status}` });
+    throw new Error(`API 错误 / API Error (${res.status})`);
+  }
+
+  const data = Array.isArray(j.data) ? j.data : [];
+  if (!data.length) {
+    addOutputItem({ title: "FLUX.1-Kontext-dev 返回无数据 / Empty response", rawJson: j });
+    setStatus("FLUX.1-Kontext-dev 失败 / Failed", "err");
+    return;
+  }
+
+  for (let i = 0; i < data.length; i++) {
+    const item = data[i] || {};
+    let blobInfo = null;
+
+    if (item.url) {
+      blobInfo = await fetchAsBlob(item.url, "image");
+    } else if (item.b64_json) {
+      const byteChars = atob(item.b64_json);
+      const bytes = new Uint8Array(byteChars.length);
+      for (let k = 0; k < byteChars.length; k++) bytes[k] = byteChars.charCodeAt(k);
+      const blob = new Blob([bytes], { type: "image/png" });
+      blobInfo = { blob, objUrl: URL.createObjectURL(blob) };
+    } else {
+      addOutputItem({ title: `FLUX.1-Kontext-dev 第${i+1}张无数据 / No image data`, rawJson: item });
+      continue;
+    }
+
+    const img = document.createElement("img");
+    img.src = blobInfo.objUrl;
+
     addOutputItem({
-      title: "Edit-2511 创建任务失败 / Create failed",
-      meta: `HTTP ${res.status}`,
-      rawJson: j,
+      title: `FLUX.1-Kontext-dev 输出 #${i+1}`,
+      meta: `steps=${steps}, guidance=${guidance}`,
+      element: img,
+      download: { href: blobInfo.objUrl, filename: `flux-kontext-${nowTs()}-${i+1}.png` },
+      openUrl: $("editOpenUrl").checked ? item.url : null,
     });
-    throw new Error("创建任务失败 / Create failed");
   }
 
-  const taskId = j.task_id;
-  setStatus(`Edit-2511 任务已创建，开始轮询... (${taskId.slice(0,8)})`);
-
-  const result = await pollTask(taskId, apiKey, {
-    intervalMs: 6000,
-    onTick: (info) => {
-      setStatus(
-        waitingStatusText(
-          "Edit-2511",
-          info.tick,
-          info.elapsedMs,
-          `task=${taskId.slice(0,8)}`
-        )
-      );
-    },
-  });
-
-  addOutputItem({ title: `Edit-2511 任务结果 task=${taskId.slice(0,8)}`, rawJson: result.raw });
-
-  if (result.status !== "success") {
-    setStatus("Edit-2511 失败 / Failed", "err");
-    throw new Error(`任务失败 / Task failed: ${result.status}`);
-  }
-
-  const fileUrl = result.raw?.output?.file_url;
-  if (!fileUrl) throw new Error("success 但没有 file_url / no file_url");
-
-  setStatus("Edit-2511 下载中... / Downloading...");
-  const { objUrl } = await fetchAsBlob(fileUrl, "image");
-
-  const img = document.createElement("img");
-  img.src = objUrl;
-
-  addOutputItem({
-    title: "Edit-2511 输出图片",
-    meta: `task_id=${taskId}`,
-    element: img,
-    download: { href: objUrl, filename: `edit-2511-${nowTs()}.png` },
-    openUrl: $("editOpenUrl").checked ? fileUrl : null,
-  });
-
-  setStatus("Edit-2511 成功 / Success", "ok");
+  setStatus("FLUX.1-Kontext-dev 成功 / Success", "ok");
 }
 
 // -------- Wan2.2 I2V --------
