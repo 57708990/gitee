@@ -492,7 +492,7 @@ async function runEdit() {
   fd.append("guidance_scale", String(guidance));
   fd.append("seed", String(Math.floor(Math.random() * 2147483647)));
   fd.append("return_image_quality", "80");
-  fd.append("return_image_format", "png");
+  fd.append("return_image_format", "PNG");
   fd.append("lora_scale", "0");
   fd.append("width", "1024");
   fd.append("height", "1024");
