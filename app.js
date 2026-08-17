@@ -81,8 +81,8 @@ function clearRememberedKey() {
 }
 
 function showPanel(model) {
-  $("panelZ").style.display = model === "FLUX.1-dev" ? "block" : "none";
-  $("panelEdit").style.display = model === "FLUX.1-Kontext-dev" ? "block" : "none";
+  $("panelZ").style.display = model === "z-image" ? "block" : "none";
+  $("panelEdit").style.display = model === "Edit-2511" ? "block" : "none";
   $("panelWan").style.display = model === "Wan2.2-I2V-A14B" ? "block" : "none";
   $("panelHunyuan").style.display = model === "HunyuanVideo-1.5" ? "block" : "none";
 }
