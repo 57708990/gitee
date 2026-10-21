@@ -390,7 +390,7 @@ async function runHunyuanVideo() {
   }
 }
 
-// -------- Qwen-Image-2.0-Pro (文生图) --------
+// -------- Qwen-Image-2512 (文生图) --------
 async function runZImage() {
   const apiKey = getApiKey();
   rememberKeyMaybe();
@@ -400,16 +400,10 @@ async function runZImage() {
 
   const n = clampInt($("zN").value, 1, 4, 1);
   const [w, h] = Z_RESOLUTIONS[$("zRes").value];
-  const size = `${w}*${h}`;
+  const size = `${w}x${h}`;
 
-  setStatus("Qwen-Image-2.0-Pro 生成中... / Generating...");
-  const payload = {
-    prompt,
-    model: "qwen-image-2.0-pro",
-    n,
-    size,
-    watermark: false,
-  };
+  setStatus("Qwen-Image-2512 生成中... / Generating...");
+  const payload = { prompt, model: "Qwen-Image-2512", n, size };
 
   const res = await apiFetch("images/generations", {
     method: "POST",
@@ -422,15 +416,15 @@ async function runZImage() {
 
   const j = await readJsonSafely(res);
   if (!res.ok) {
-    setStatus("Qwen-Image-2.0-Pro 失败 / Failed", "err");
-    addOutputItem({ title: "Qwen-Image-2.0-Pro 生成失败 / Failed", rawJson: j, meta: `HTTP ${res.status}` });
+    setStatus("Qwen-Image-2512 失败 / Failed", "err");
+    addOutputItem({ title: "Qwen-Image-2512 生成失败 / Failed", rawJson: j, meta: `HTTP ${res.status}` });
     throw new Error(`API 错误 / API Error (${res.status})`);
   }
 
   const data = Array.isArray(j.data) ? j.data : [];
   if (!data.length) {
-    addOutputItem({ title: "Qwen-Image-2.0-Pro 返回无数据 / Empty response", rawJson: j });
-    setStatus("Qwen-Image-2.0-Pro 失败 / Failed", "err");
+    addOutputItem({ title: "Qwen-Image-2512 返回无数据 / Empty response", rawJson: j });
+    setStatus("Qwen-Image-2512 失败 / Failed", "err");
     return;
   }
 
@@ -455,25 +449,16 @@ async function runZImage() {
     img.src = blobInfo.objUrl;
 
     addOutputItem({
-      title: `Qwen-Image-2.0-Pro 输出 #${i+1}`,
+      title: `Qwen-Image-2512 输出 #${i+1}`,
       meta: `size=${size}, n=${n}`,
       element: img,
-      download: { href: blobInfo.objUrl, filename: `qwen-pro-${nowTs()}-${i+1}.png` },
+      download: { href: blobInfo.objUrl, filename: `qwen-2512-${nowTs()}-${i+1}.png` },
     });
   }
 
-  setStatus("Qwen-Image-2.0-Pro 成功 / Success", "ok");
+  setStatus("Qwen-Image-2512 成功 / Success", "ok");
 }
-// -------- Qwen-Image-2.0-Pro (图生图/编辑) --------
-function fileToDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(r.result);
-    r.onerror = () => reject(new Error("读取图片失败 / Failed to read image"));
-    r.readAsDataURL(file);
-  });
-}
-
+// -------- Edit-2511 --------
 async function runEdit() {
   const apiKey = getApiKey();
   rememberKeyMaybe();
@@ -481,76 +466,83 @@ async function runEdit() {
   const f1 = $("editImg1").files?.[0];
   const f2 = $("editImg2").files?.[0];
   const prompt = $("editPrompt").value.trim();
-  if (!f1 || !prompt) throw new Error("请至少上传图1并输入提示词 / Please provide Image 1 and prompt");
+  if (!f1 || !f2 || !prompt) throw new Error("请上传2张图片并输入提示词 / Please provide 2 images and prompt");
 
-  const images = [await fileToDataUrl(f1)];
-  if (f2) images.push(await fileToDataUrl(f2));
+  const taskTypes = Array.from(document.querySelectorAll("input[name='editTaskType']:checked")).map(x => x.value);
+  if (!taskTypes.length) throw new Error("至少选择一个 task_types / Choose at least one task type");
 
-  const size = "1024*1024";
+  const steps = clampInt($("editSteps").value, 1, 50, 4);
+  const guidance = clampFloat($("editGuidance").value, 0, 10, 1.0);
 
-  setStatus("Qwen-Image-2.0-Pro 编辑中... / Generating...");
-  const payload = {
-    prompt,
-    model: "qwen-image-2.0-pro",
-    n: 1,
-    size,
-    images,
-    watermark: false,
-  };
+  const fd = new FormData();
+  fd.append("prompt", prompt);
+  fd.append("model", "Qwen-Image-Edit-2511");
+  fd.append("num_inference_steps", String(steps));
+  fd.append("guidance_scale", String(guidance));
+  for (const t of taskTypes) fd.append("task_types", t);
+  fd.append("image", f1, f1.name);
+  fd.append("image", f2, f2.name);
 
-  const res = await apiFetch("images/generations", {
+  setStatus("Edit-2511 创建任务中... / Creating task...");
+  const res = await apiFetch("async/images/edits", {
     method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
+    headers: { "Authorization": `Bearer ${apiKey}` },
+    body: fd,
   });
 
   const j = await readJsonSafely(res);
-  if (!res.ok) {
-    setStatus("Qwen-Image-2.0-Pro 失败 / Failed", "err");
-    addOutputItem({ title: "Qwen-Image-2.0-Pro 编辑失败 / Failed", rawJson: j, meta: `HTTP ${res.status}` });
-    throw new Error(`API 错误 / API Error (${res.status})`);
-  }
-
-  const data = Array.isArray(j.data) ? j.data : [];
-  if (!data.length) {
-    addOutputItem({ title: "Qwen-Image-2.0-Pro 返回无数据 / Empty response", rawJson: j });
-    setStatus("Qwen-Image-2.0-Pro 失败 / Failed", "err");
-    return;
-  }
-
-  for (let i = 0; i < data.length; i++) {
-    const item = data[i] || {};
-    let blobInfo = null;
-
-    if (item.url) {
-      blobInfo = await fetchAsBlob(item.url, "image");
-    } else if (item.b64_json) {
-      const byteChars = atob(item.b64_json);
-      const bytes = new Uint8Array(byteChars.length);
-      for (let k = 0; k < byteChars.length; k++) bytes[k] = byteChars.charCodeAt(k);
-      const blob = new Blob([bytes], { type: "image/png" });
-      blobInfo = { blob, objUrl: URL.createObjectURL(blob) };
-    } else {
-      addOutputItem({ title: `第${i+1}张无数据 / No image data`, rawJson: item });
-      continue;
-    }
-
-    const img = document.createElement("img");
-    img.src = blobInfo.objUrl;
-
+  if (!res.ok || !j.task_id) {
+    setStatus("Edit-2511 创建失败 / Create failed", "err");
     addOutputItem({
-      title: `Qwen-Image-2.0-Pro 编辑输出 #${i+1}`,
-      meta: `size=${size}, images=${images.length}`,
-      element: img,
-      download: { href: blobInfo.objUrl, filename: `qwen-pro-edit-${nowTs()}-${i+1}.png` },
-      openUrl: $("editOpenUrl").checked && item.url ? item.url : null,
+      title: "Edit-2511 创建任务失败 / Create failed",
+      meta: `HTTP ${res.status}`,
+      rawJson: j,
     });
+    throw new Error("创建任务失败 / Create failed");
   }
 
-  setStatus("Qwen-Image-2.0-Pro 成功 / Success", "ok");
+  const taskId = j.task_id;
+  setStatus(`Edit-2511 任务已创建，开始轮询... (${taskId.slice(0,8)})`);
+
+  const result = await pollTask(taskId, apiKey, {
+    intervalMs: 6000,
+    onTick: (info) => {
+      setStatus(
+        waitingStatusText(
+          "Edit-2511",
+          info.tick,
+          info.elapsedMs,
+          `task=${taskId.slice(0,8)}`
+        )
+      );
+    },
+  });
+
+  addOutputItem({ title: `Edit-2511 任务结果 task=${taskId.slice(0,8)}`, rawJson: result.raw });
+
+  if (result.status !== "success") {
+    setStatus("Edit-2511 失败 / Failed", "err");
+    throw new Error(`任务失败 / Task failed: ${result.status}`);
+  }
+
+  const fileUrl = result.raw?.output?.file_url;
+  if (!fileUrl) throw new Error("success 但没有 file_url / no file_url");
+
+  setStatus("Edit-2511 下载中... / Downloading...");
+  const { objUrl } = await fetchAsBlob(fileUrl, "image");
+
+  const img = document.createElement("img");
+  img.src = objUrl;
+
+  addOutputItem({
+    title: "Edit-2511 输出图片",
+    meta: `task_id=${taskId}`,
+    element: img,
+    download: { href: objUrl, filename: `edit-2511-${nowTs()}.png` },
+    openUrl: $("editOpenUrl").checked ? fileUrl : null,
+  });
+
+  setStatus("Edit-2511 成功 / Success", "ok");
 }
 
 // -------- Wan2.2 I2V --------
